@@ -1,0 +1,76 @@
+Outputs:
+  Bucket:
+    Value: !Ref Bucket
+  URL:
+    Value: !Sub https://${RestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${RestApiStage}
+
+Resources:
+  # A place to store the files to serve
+  Bucket:
+    Type: AWS::S3::Bucket
+
+  # Allow APIGateway to GetObjects from the bucket
+  BucketRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: s3:GetObject
+                Resource: arn:aws:s3:::${Bucket}/*
+          PolicyName: s3
+
+  # Some API Boilerplate
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+
+  RestDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RestGet
+    Properties:
+      RestApiId: !Ref RestApi
+
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestDeployment
+
+  # Define a resource that can match any path
+  RestResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "{item+}"
+
+  # Define HTTP GET for the resource
+  RestGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestResource
+      AuthorizationType: NONE  # This method is public.
+      HttpMethod: GET
+      RequestParameters:
+        method.request.path.item: true  # The item path parameter is required, fail if it's missing
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt BucketRole.Arn
+        IntegrationHttpMethod: GET
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:s3:path/${Bucket}/{item}
+        # Or:
+        # IntegrationHttpMethod: POST
+        # Uri: !Sub arn:aws:apigateway:${AWS::Region}:s3:action/GetObject&Bucket=${Bucket}&Key={item}
+        RequestParameters:  # The parameters passed from this method to the integration/backend, in this case it's just item, and it's mapped into the URI above
+          integration.request.path.item: 'method.request.path.item'
