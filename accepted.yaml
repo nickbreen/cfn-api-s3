@@ -89,19 +89,10 @@ Resources:
         RequestTemplates:
           application/json: Action=SendMessage&MessageBody=$util.urlEncode($input.body)
         IntegrationResponses:
-          - StatusCode: 202
-            # ResponseParameters:
-            #   method.response.header.X-Foo: integration.response.body.SendMessageResponse.ResponseMetadata.RequestId
+          - StatusCode: 200  # This, the first one, is also the default match, so the code here means nothing
             ResponseTemplates:
-              # Apparently we cannot use ResponseParameters to rewrite headers for an AWS Type integration
-              # So we must do them with the VTL template below.
-              # The response must be valid JSON, so it cannot simply be empty.
-              # Why? Because we're pretending this response comes from the AWS service integration.
               application/json: |
-                #set($context.responseOverride.header.x-Foo = $input.path('$.SendMessageResponse.ResponseMetadata.RequestId'))
-                ##set($context.responseOverride.status = 204)
-                {}
+                #set($context.responseOverride.status = 204)
+                null  ## turns out this is a valid JSON document: AWS (but not localstack) is very strict about 204 having no body
       MethodResponses:
-        - StatusCode: 202
-          ResponseParameters:
-            method.response.header.X-Foo: false
+        - StatusCode: 200  # This, the first one, is also the default match, so the code here means nothing
