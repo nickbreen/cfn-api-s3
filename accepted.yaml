@@ -1,0 +1,102 @@
+Outputs:
+  Queue:
+    Value: !Ref Queue
+  URL:
+    Value: !Sub https://${RestApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/${RestApiStage}
+
+Resources:
+  # A place to store the files to serve
+  Queue:
+    Type: AWS::SQS::Queue
+
+  # Allow APIGateway to GetObjects from the bucket
+  QueuePolicy:
+    DependsOn: ["Queue"]
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          - Action: SQS:*
+            Effect: Allow
+            Principal: !Ref AWS::AccountId
+            Resource: !GetAtt Queue.Arn
+        Version: '2012-10-17'
+      Queues:
+        - !Ref Queue
+
+  Role:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: apigateway.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt Queue.Arn
+          PolicyName: sqs
+
+  # Some API Boilerplate
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+
+  RestDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - RestGet
+    Properties:
+      RestApiId: !Ref RestApi
+
+  RestApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref RestDeployment
+
+  RestResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: "queue"
+
+  # Define HTTP GET for the resource
+  RestGet:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref RestResource
+      AuthorizationType: NONE  # This method is public.
+      HttpMethod: POST
+      Integration:
+        Type: AWS
+        Credentials: !GetAtt Role.Arn
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${Queue.QueueName}
+        PassthroughBehavior: NEVER
+        RequestParameters:
+          integration.request.header.Content-Type: application/x-www-form-urlencoded
+        RequestTemplates:
+          application/json: Action=SendMessage&MessageBody=$util.urlEncode($input.body)
+        IntegrationResponses:
+          - StatusCode: 202
+#            ResponseParameters:
+#              method.response.header.X-Foo: |
+#                integration.response.body.SendMessageResponse.ResponseMetadata.RequestId
+#              method.response.header.X-Bar: |
+#                'bar'
+            ResponseTemplates:
+              application/json: |
+                $input.json('$.SendMessageResponse.ResponseMetadata.RequestId')
+      MethodResponses:
+        - StatusCode: 202
+#          ResponseParameters:
+#            method.response.header.X-Foo: true
+#            method.response.header.X-Bar: true
