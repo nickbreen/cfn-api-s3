@@ -11,14 +11,15 @@ Resources:
 
   # Allow APIGateway to GetObjects from the bucket
   QueuePolicy:
-    DependsOn: ["Queue"]
+    DependsOn:
+      - Queue
     Type: AWS::SQS::QueuePolicy
     Properties:
       PolicyDocument:
         Statement:
           - Action: SQS:*
             Effect: Allow
-            Principal: !Ref AWS::AccountId
+            Principal: '*'
             Resource: !GetAtt Queue.Arn
         Version: '2012-10-17'
       Queues:
@@ -46,11 +47,13 @@ Resources:
   # Some API Boilerplate
   RestApi:
     Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: Accepted
 
   RestDeployment:
     Type: AWS::ApiGateway::Deployment
     DependsOn:
-      - RestGet
+      - RestPost
     Properties:
       RestApiId: !Ref RestApi
 
@@ -59,6 +62,7 @@ Resources:
     Properties:
       RestApiId: !Ref RestApi
       DeploymentId: !Ref RestDeployment
+      TracingEnabled: true
 
   RestResource:
     Type: AWS::ApiGateway::Resource
@@ -67,8 +71,7 @@ Resources:
       ParentId: !GetAtt RestApi.RootResourceId
       PathPart: "queue"
 
-  # Define HTTP GET for the resource
-  RestGet:
+  RestPost:
     Type: AWS::ApiGateway::Method
     Properties:
       RestApiId: !Ref RestApi
@@ -82,21 +85,23 @@ Resources:
         Uri: !Sub arn:aws:apigateway:${AWS::Region}:sqs:path/${AWS::AccountId}/${Queue.QueueName}
         PassthroughBehavior: NEVER
         RequestParameters:
-          integration.request.header.Content-Type: application/x-www-form-urlencoded
+          integration.request.header.Content-Type: "'application/x-www-form-urlencoded'"
         RequestTemplates:
           application/json: Action=SendMessage&MessageBody=$util.urlEncode($input.body)
         IntegrationResponses:
           - StatusCode: 202
-#            ResponseParameters:
-#              method.response.header.X-Foo: |
-#                integration.response.body.SendMessageResponse.ResponseMetadata.RequestId
-#              method.response.header.X-Bar: |
-#                'bar'
+            # ResponseParameters:
+            #   method.response.header.X-Foo: integration.response.body.SendMessageResponse.ResponseMetadata.RequestId
             ResponseTemplates:
+              # Apparently we cannot use ResponseParameters to rewrite headers for an AWS Type integration
+              # So we must do them with the VTL template below.
+              # The response must be valid JSON, so it cannot simply be empty.
+              # Why? Because we're pretending this response comes from the AWS service integration.
               application/json: |
-                $input.json('$.SendMessageResponse.ResponseMetadata.RequestId')
+                #set($context.responseOverride.header.x-Foo = $input.path('$.SendMessageResponse.ResponseMetadata.RequestId'))
+                ##set($context.responseOverride.status = 204)
+                {}
       MethodResponses:
         - StatusCode: 202
-#          ResponseParameters:
-#            method.response.header.X-Foo: true
-#            method.response.header.X-Bar: true
+          ResponseParameters:
+            method.response.header.X-Foo: false
