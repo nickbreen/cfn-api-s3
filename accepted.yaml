@@ -93,6 +93,7 @@ Resources:
             ResponseTemplates:
               application/json: |
                 #set($context.responseOverride.status = 204)
+                #set($context.responseOverride.header.X-Correlation-ID = $input.path('$.SendMessageResponse.SendMessageResult.MessageId'))
                 null  ## turns out this is a valid JSON document: AWS (but not localstack) is very strict about 204 having no body
       MethodResponses:
         - StatusCode: 200  # This, the first one, is also the default match, so the code here means nothing
