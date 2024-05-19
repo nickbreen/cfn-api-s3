@@ -61,3 +61,27 @@ curl -sSfD/dev/stderr --header 'Content-Type: application/json' --header 'Accept
 queue=$(aws cloudformation describe-stacks --stack-name accepted --output text --query "Stacks[].Outputs[?OutputKey == 'Queue'].OutputValue")
 aws sqs receive-message --queue-url $queue --max-number-of-messages 10 | jq .
 ```
+
+# Bazel
+
+Stopped immediately by a bug with `rules_python`: https://github.com/bazelbuild/rules_python/issues/1659.
+
+# Utter Python Bullshit
+
+My system python is 3.12, which `awsebcli` is not compatible with: https://github.com/aws/aws-elastic-beanstalk-cli-setup/issues/153.
+
+So we need this crap: https://github.com/pyenv/pyenv.
+
+So know that we're building python from source for any given version... just follow `pyenv`' instructions. Sigh.
+
+```shell
+. .env
+pyenv install 3.11
+pyenv versison
+pyenv -m venv .venv
+. .venv/bin/activate
+pip install awssebcli
+eb --version
+```
+
+OMG.
