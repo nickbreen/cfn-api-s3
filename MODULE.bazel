@@ -14,11 +14,3 @@ python.toolchain(
 use_repo(python, "python_toolchains")
 
 register_toolchains("@python_toolchains//:all")
-
-pip = use_extension("@rules_python//python/extensions:pip.bzl", "pip")
-pip.parse(
-    hub_name = "awsebcli",
-    python_version = "3.11",
-    requirements_lock = "//:requirements.txt",
-)
-use_repo(pip, "awsebcli")
